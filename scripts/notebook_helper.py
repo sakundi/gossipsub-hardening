@@ -18,7 +18,7 @@ import base64
 import sys
 from collections import defaultdict
 from functools import reduce
-import pandas_sets # imported for side effects, don't remove!
+# import pandas_sets # imported for side effects, don't remove!
 
 
 # tracer event types
@@ -38,6 +38,42 @@ def empty_scores_dataframe():
     return pd.DataFrame([], columns=['observer', 'peer', 'timestamp', 'score']).astype(
         {'score': 'float64', 'observer': 'int64', 'peer': 'int64', 'timestamp': 'datetime64[ns]'})
 
+def load_trace_data(traces_filepath):
+    # load trace data
+    print('Loading test data from ' + traces_filepath)
+    if not os.path.exists(traces_filepath+"/pandas/traces.gz"):
+        cols = ['type', 'peerID', 'timestamp']
+        data = []
+
+        with open(traces_filepath+"/full-trace.json") as f:
+            for line in f:
+                doc = json.loads(line)
+                lst = [doc['type'], doc['peerID'], doc['timestamp']]
+                data.append(lst)
+
+        traces = pd.DataFrame(data=data, columns=cols)
+        traces.to_pickle(traces_filepath+"/pandas/traces.gz")
+    else:
+        traces = pd.read_pickle(traces_filepath+"/pandas/traces.gz")
+    peer_info_filename = os.path.join(traces_filepath, 'peer-info.json')
+    peers = peer_info_to_pandas(peer_info_filename)
+    # select the cols from peers table we want to join on
+    p = peers[['peer_id', 'seq', 'honest']]
+    traces = traces.sort_values(['peerID', 'timestamp'])
+    peers = traces.peerID.unique()
+    traces['timestamp'] = pd.to_datetime(traces['timestamp'])
+    traces.set_index('timestamp', inplace=True)
+    traces = traces.groupby(['peerID', traces.index.second])['type'].value_counts()
+    traces = traces.unstack(level="type", fill_value=0)\
+    .reset_index(level=["peerID", "timestamp"])
+    traces = traces.drop(columns=['timestamp'])
+    traces.rename(columns = {'peerID':'peer_id'}, inplace = True)
+    traces['peer_id'] = traces['peer_id'].apply(lambda x: b64_to_b58(x))
+    traces = traces.merge(p, on='peer_id')
+    traces = traces.drop(columns=['peer_id'])
+    traces = traces.rename(columns={'seq': 'peer'})
+    traces = traces.sort_values(['peer'])
+    return traces
 
 def aggregate_peer_scores_single(scores_filepath, peers_table):
     df = empty_scores_dataframe()
@@ -52,11 +88,15 @@ def aggregate_peer_scores_single(scores_filepath, peers_table):
             except BaseException as err:
                 print('error parsing score json: ', err)
                 continue
-            scores = pd.json_normalize(data['Scores'])
+            scores = pd.json_normalize(data['Scores'], max_level=0)
             scores = scores.T \
                 .rename(columns={0: 'score'}) \
                 .reset_index() \
                 .rename(columns={'index': 'peer_id'})
+            score_json = pd.json_normalize(scores['score'], max_level=0)
+            scores = pd.concat([scores, score_json], axis=1)
+            scores = scores.drop('score', axis=1)
+            scores = scores.rename(columns={'Score': 'score'})
             scores['timestamp'] = pd.to_datetime(data['Timestamp'])
             scores['observer_id'] = data['PeerID']
 
@@ -67,6 +107,10 @@ def aggregate_peer_scores_single(scores_filepath, peers_table):
             s = s.rename(columns={'seq_peer': 'peer', 'seq_observer': 'observer'})
 
             df = df.append(s, ignore_index=True)
+    topics = pd.json_normalize(df['Topics']).copy()
+    topics.reset_index(drop=True, inplace=True)
+    df = df.drop('Topics', axis=1)
+    df = pd.concat([df, topics], axis=1)
     df.set_index('timestamp', inplace=True)
     return df
 

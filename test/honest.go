@@ -59,9 +59,12 @@ type HonestNodeConfig struct {
 	OpportunisticGraftTicks int
 }
 
+type PeerScoreSnapshot = pubsub.PeerScoreSnapshot
+type ExtendedPeerScoreInspectFn = pubsub.ExtendedPeerScoreInspectFn
+
 type InspectParams struct {
 	// The callback function that is called with the peer scores
-	Inspect func(map[peer.ID]float64)
+	Inspect func(map[peer.ID]*PeerScoreSnapshot)
 	// The interval between calling Inspect (defaults to zero: dont inspect).
 	Period time.Duration
 }

@@ -236,7 +236,7 @@ func (t *testInstance) startHonest(ctx context.Context) error {
 	if t.params.scoreInspectPeriod != 0 {
 		scoreInspectParams.Period = t.params.scoreInspectPeriod
 
-		outpath := fmt.Sprintf("%s%cpeer-scores-honest-%d.json", t.TestOutputsPath, os.PathSeparator, t.seq)
+		outpath := fmt.Sprintf("%s%cpeer-scores-honest-full-%d.json", t.TestOutputsPath, os.PathSeparator, t.seq)
 		file, err := os.OpenFile(outpath, os.O_CREATE|os.O_WRONLY, os.ModePerm)
 		if err != nil {
 			return fmt.Errorf("error opening peer score output file at %s: %s", outpath, err)
@@ -247,11 +247,11 @@ func (t *testInstance) startHonest(ctx context.Context) error {
 		type entry struct {
 			Timestamp int64
 			PeerID    string
-			Scores    map[string]float64
+			Scores    map[string]*PeerScoreSnapshot
 		}
-		scoreInspectParams.Inspect = func(scores map[peer.ID]float64) {
+		scoreInspectParams.Inspect = func(scores map[peer.ID]*PeerScoreSnapshot) {
 			ts := time.Now().UnixNano()
-			pretty := make(map[string]float64, len(scores))
+			pretty := make(map[string]*PeerScoreSnapshot, len(scores))
 			for p, s := range scores {
 				pretty[p.Pretty()] = s
 			}

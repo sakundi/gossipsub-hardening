@@ -61,6 +61,7 @@ class RunButton(object):
             archive_filename = os.path.join(workdir, 'test-output.zip')
 
         with open(comp_filename, 'wt') as f:
+            print("Composition path: ", comp_filename)
             f.write(comp)
 
         with open(params_filename, 'w') as f:
@@ -69,12 +70,21 @@ class RunButton(object):
         with open(config_snapshot_filename, 'w') as f:
             json.dump(self.config.snapshot(), f)
 
+        p = subprocess.Popen("docker rm -f testground-redis".split(),
+                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True)
+        p = subprocess.Popen("docker ps --all | grep Exited | gawk '{print $1}' | xargs docker rm -f".split(),
+                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True)
+        p = subprocess.Popen("docker ps --all | grep Created | gawk '{print $1}' | xargs docker rm -f".split(),
+                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True)
+        p = subprocess.Popen("docker images | grep minutes | gawk '{print $3}' | xargs docker rmi".split(),
+                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True)
         cmd = [TESTGROUND, '--vv',
                '--endpoint', endpoint,
                'run', 'composition',
                '-f', comp_filename,
                '--collect', '-o', archive_filename]
 
+        print("Testground command: ", cmd)
         p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True)
         for line in iter(p.stdout.readline, ''):
             print(line, end='')
