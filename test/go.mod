@@ -1,4 +1,4 @@
-module github.com/protocol/gossipsub-hardening/test
+module github.com/sakundi/gossipsub-hardening/test
 
 go 1.13
 
